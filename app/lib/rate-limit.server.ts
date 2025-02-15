@@ -3,8 +3,8 @@ const rateLimits = new Map<string, { attempts: number; resetTime: number }>();
 
 const WINDOW_SIZE = 15 * 60 * 1000; // 15 minutes in milliseconds
 const MAX_REQUESTS = {
-  login: 5,
-  signup: 3,
+  login: process.env.NODE_ENV === 'development' ? 100 : 5,
+  signup: process.env.NODE_ENV === 'development' ? 50 : 3,
 };
 
 // Clean up expired rate limits
@@ -21,6 +21,11 @@ export async function rateLimit(
   ip: string,
   action: 'login' | 'signup'
 ): Promise<{ success: boolean; remaining: number }> {
+  // Skip rate limiting in development
+  if (process.env.NODE_ENV === 'development') {
+    return { success: true, remaining: MAX_REQUESTS[action] };
+  }
+
   const key = `${action}:${ip}`;
   const now = Date.now();
 

@@ -4,9 +4,7 @@ import {
   Outlet,
   ScrollRestoration,
   Scripts,
-  LiveReload,
   useNavigate,
-  useMatches,
 } from "@remix-run/react";
 import type { LinksFunction } from "@remix-run/node";
 import { ToastProvider } from './components/toast-provider';
@@ -47,7 +45,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <ToastProvider />
         <ScrollRestoration />
         <Scripts />
-        <LiveReload />
       </body>
     </html>
   );
@@ -62,11 +59,11 @@ export default function App() {
 
   // Skip WebSocket in WebContainer environment
   const wsUrl = typeof window !== 'undefined' && !isWebContainer
-    ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/socket`
+    ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//localhost:5173/socket`
     : '';
 
   // Use the WebSocket hook with proper error handling
-  const { isConnected } = useWebSocket({
+  useWebSocket({
     url: wsUrl,
     reconnectAttempts: 5,
     reconnectInterval: 2000,
@@ -91,6 +88,7 @@ export default function App() {
   // Global error handler
   useEffect(() => {
     const handleError = (event: ErrorEvent) => {
+      // List of errors to ignore
       const ignoredErrors = [
         'WebSocket',
         'ws://',
@@ -104,23 +102,37 @@ export default function App() {
         'There was an error while hydrating',
         'Cannot read properties of null',
         'Invalid hook call',
-        'handshake'
+        'handshake',
+        'Failed to fetch',
+        'Network Error',
+        'AbortError',
+        'Not Found',
+        '404'
       ];
 
-      if (ignoredErrors.some(err => event.message.includes(err))) {
+      // Check if the error should be ignored
+      if (ignoredErrors.some(err => 
+        event.message?.includes(err) || 
+        event.error?.message?.includes(err) ||
+        event.error?.stack?.includes(err)
+      )) {
         return;
       }
 
       console.error('Unhandled error:', event.error);
       
-      // Navigate to error page only for critical errors
+      // Only navigate to error page for serious application errors
       const isCriticalError = event.error && 
         !(event.error instanceof TypeError) && 
+        !(event.error instanceof ReferenceError) &&
         !event.message.includes('chunk') &&
-        !event.message.includes('loading');
+        !event.message.includes('loading') &&
+        !event.message.includes('network') &&
+        !event.message.includes('fetch') &&
+        !window.location.pathname.includes('/error');
         
       if (isCriticalError) {
-        navigate('/error');
+        navigate('/error', { replace: true });
       }
     };
 
@@ -132,14 +144,18 @@ export default function App() {
   useEffect(() => {
     const originalError = console.error;
     console.error = (...args) => {
-      // Ignore hydration warnings and expected development issues
+      // Ignore common development and hydration warnings
       if (
         typeof args[0] === 'string' &&
         (args[0].includes('Warning: Text content did not match') ||
          args[0].includes('Warning: Expected server HTML to contain') ||
          args[0].includes('WebSocket connection') ||
          args[0].includes('Invalid hook call') ||
-         args[0].includes('Cannot read properties of null'))
+         args[0].includes('Cannot read properties of null') ||
+         args[0].includes('Failed to fetch') ||
+         args[0].includes('Network Error') ||
+         args[0].includes('404') ||
+         args[0].includes('Not Found'))
       ) {
         return;
       }
