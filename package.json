@@ -10,9 +10,9 @@
     "typecheck": "tsc"
   },
   "dependencies": {
-    "@remix-run/node": "*",
-    "@remix-run/react": "*",
-    "@remix-run/serve": "*",
+    "@remix-run/node": "^2.8.1",
+    "@remix-run/react": "^2.8.1",
+    "@remix-run/serve": "^2.8.1",
     "@supabase/ssr": "^0.1.0",
     "@supabase/supabase-js": "^2.48.1",
     "clsx": "^2.1.0",
@@ -22,13 +22,15 @@
     "react-dom": "^18.2.0",
     "sonner": "^1.4.41",
     "tailwind-merge": "^2.2.2",
+    "ws": "^8.18.0",
     "zod": "^3.22.4"
   },
   "devDependencies": {
-    "@remix-run/dev": "*",
-    "@types/node": "^20.11.30",
+    "@remix-run/dev": "^2.8.1",
+    "@types/node": "^20.17.19",
     "@types/react": "^18.2.20",
-    "@types/react-dom": "^18.2.7",
+    "@types/react-dom": "^18.3.5",
+    "@types/ws": "^8.5.14",
     "@typescript-eslint/eslint-plugin": "^6.7.4",
     "@typescript-eslint/parser": "^6.7.4",
     "autoprefixer": "^10.4.19",
@@ -45,6 +47,6 @@
     "vite-tsconfig-paths": "^4.2.1"
   },
   "engines": {
-    "node": "^20.0.0"
+    "node": "^22.13.1"
   }
 }
