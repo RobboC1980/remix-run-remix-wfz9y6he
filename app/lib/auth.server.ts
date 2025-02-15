@@ -1,8 +1,6 @@
-import { createServerClient } from '@supabase/ssr';
 import { json, redirect } from '@remix-run/node';
 import type { Session } from '@supabase/supabase-js';
 import { getSupabaseClient } from './supabase.server';
-import type { Database } from '~/types/supabase';
 import { rateLimit } from './rate-limit.server';
 
 const MAX_LOGIN_ATTEMPTS = 5;
@@ -51,12 +49,36 @@ export async function handleAuthAction(request: Request, action: 'login' | 'sign
   const formData = await request.formData();
   const email = formData.get('email') as string;
   const password = formData.get('password') as string;
+  const fullName = formData.get('fullName') as string;
 
   // Input validation
-  if (!email || !password) {
+  if (action === 'signup') {
+    if (!fullName?.trim()) {
+      return json(
+        { error: 'Full name is required' },
+        { status: 400, headers }
+      );
+    }
+  }
+
+  if (!email?.trim()) {
     return json(
-      { error: 'Please fill in all required fields' },
-      { status: 400 }
+      { error: 'Email is required' },
+      { status: 400, headers }
+    );
+  }
+
+  if (!password?.trim()) {
+    return json(
+      { error: 'Password is required' },
+      { status: 400, headers }
+    );
+  }
+
+  if (password.length < 6) {
+    return json(
+      { error: 'Password must be at least 6 characters long' },
+      { status: 400, headers }
     );
   }
 
@@ -66,7 +88,7 @@ export async function handleAuthAction(request: Request, action: 'login' | 'sign
   if (!rateLimitResult.success) {
     return json(
       { error: 'Too many attempts. Please try again later.' },
-      { status: 429 }
+      { status: 429, headers }
     );
   }
 
@@ -91,6 +113,9 @@ export async function handleAuthAction(request: Request, action: 'login' | 'sign
         action: 'login',
         ip_address: ip,
         user_agent: request.headers.get('user-agent') || 'unknown'
+      }).catch(error => {
+        // Log but don't fail the request
+        console.error('Failed to log login:', error);
       });
 
       return redirect('/dashboard', { headers });
@@ -100,13 +125,19 @@ export async function handleAuthAction(request: Request, action: 'login' | 'sign
         password,
         options: {
           data: {
-            full_name: formData.get('fullName'),
+            full_name: fullName.trim(),
           },
         },
       });
 
       if (signUpError) {
         console.error('Signup error:', signUpError);
+        if (signUpError.message.includes('already registered')) {
+          return json(
+            { error: 'This email is already registered. Please try logging in instead.' },
+            { status: 400, headers }
+          );
+        }
         return json(
           { error: 'Failed to create account. Please try again.' },
           { status: 400, headers }
@@ -126,7 +157,7 @@ export async function handleAuthAction(request: Request, action: 'login' | 'sign
         .insert({
           id: user.id,
           email: user.email,
-          full_name: formData.get('fullName') as string
+          full_name: fullName.trim()
         });
 
       if (profileError) {
@@ -143,6 +174,9 @@ export async function handleAuthAction(request: Request, action: 'login' | 'sign
         action: 'signup',
         ip_address: ip,
         user_agent: request.headers.get('user-agent') || 'unknown'
+      }).catch(error => {
+        // Log but don't fail the request
+        console.error('Failed to log signup:', error);
       });
 
       return redirect('/dashboard', { headers });

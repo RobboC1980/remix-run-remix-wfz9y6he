@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { toast } from 'sonner';
 
 interface WebSocketConfig {
   url: string;
@@ -24,24 +23,10 @@ export function useWebSocket({
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
   const attemptRef = useRef(0);
-
-  // Early return for non-browser environments
-  if (typeof window === 'undefined') {
-    return { isConnected: false };
-  }
-
-  // Check for WebContainer environment
-  const isWebContainer = 
-    window.location.hostname.includes('webcontainer-api.io') ||
-    window.location.hostname.includes('stackblitz.io');
-
-  // Early return for WebContainer or no URL
-  if (isWebContainer || !url) {
-    return { isConnected: false };
-  }
+  const mountedRef = useRef(true);
 
   const handleReconnect = () => {
-    if (attemptRef.current >= reconnectAttempts) {
+    if (!mountedRef.current || attemptRef.current >= reconnectAttempts) {
       return;
     }
 
@@ -51,12 +36,16 @@ export function useWebSocket({
     );
     
     reconnectTimeoutRef.current = setTimeout(() => {
-      attemptRef.current++;
-      connect();
+      if (mountedRef.current) {
+        attemptRef.current++;
+        connect();
+      }
     }, delay);
   };
 
   const connect = () => {
+    if (!mountedRef.current) return;
+
     // Clean up existing connection if any
     if (wsRef.current) {
       wsRef.current.close();
@@ -68,12 +57,13 @@ export function useWebSocket({
 
       // Add error handling for connection timeout
       const connectionTimeout = setTimeout(() => {
-        if (wsRef.current?.readyState !== WebSocket.OPEN) {
+        if (mountedRef.current && wsRef.current?.readyState !== WebSocket.OPEN) {
           wsRef.current?.close();
         }
       }, 5000);
 
       wsRef.current.onopen = () => {
+        if (!mountedRef.current) return;
         clearTimeout(connectionTimeout);
         setIsConnected(true);
         attemptRef.current = 0;
@@ -81,19 +71,22 @@ export function useWebSocket({
       };
 
       wsRef.current.onclose = () => {
+        if (!mountedRef.current) return;
         setIsConnected(false);
         onClose?.();
         handleReconnect();
       };
 
-      wsRef.current.onerror = () => {
+      wsRef.current.onerror = (error) => {
+        if (!mountedRef.current) return;
         // Silent error handling in production
         if (process.env.NODE_ENV === 'development') {
-          console.debug('WebSocket connection error');
+          console.debug('WebSocket connection error:', error);
         }
       };
 
       wsRef.current.onmessage = (event) => {
+        if (!mountedRef.current) return;
         try {
           onMessage?.(event);
         } catch (error) {
@@ -101,14 +94,34 @@ export function useWebSocket({
         }
       };
     } catch (error) {
+      if (!mountedRef.current) return;
       setIsConnected(false);
       handleReconnect();
     }
   };
 
   useEffect(() => {
+    mountedRef.current = true;
+
+    // Early return for non-browser environments
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    // Check for WebContainer environment
+    const isWebContainer = 
+      window.location.hostname.includes('webcontainer-api.io') ||
+      window.location.hostname.includes('stackblitz.io');
+
+    // Early return for WebContainer or no URL
+    if (isWebContainer || !url) {
+      return;
+    }
+
     connect();
+
     return () => {
+      mountedRef.current = false;
       if (wsRef.current) {
         wsRef.current.close();
       }
